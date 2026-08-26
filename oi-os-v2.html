@@ -1891,6 +1891,24 @@ body.pat-locked,body.snippet-modal-open{overflow:hidden}
           </label>
         </div>
       </section>
+      <section class="settings-group">
+        <h3 class="settings-title">Data</h3>
+        <div class="settings-row">
+          <div class="settings-copy">
+            <span class="settings-label">Export data</span>
+            <span class="settings-desc">Download all progress as a backup file</span>
+          </div>
+          <button class="btn sm" type="button" onclick="exportData()">Export</button>
+        </div>
+        <div class="settings-row">
+          <div class="settings-copy">
+            <span class="settings-label">Import data</span>
+            <span class="settings-desc">Restore from a backup · overwrites current data</span>
+          </div>
+          <button class="btn sm" type="button" onclick="document.getElementById('importFile').click()">Import</button>
+          <input type="file" id="importFile" accept=".json,application/json" style="display:none" onchange="importDataFromFile(event)">
+        </div>
+      </section>
     </div>
   </div>
 </div>
@@ -3909,6 +3927,65 @@ function closeSettingsPanel(e){
     btn.classList.remove('active');
     btn.setAttribute('aria-expanded', 'false');
   }
+}
+function exportData(){
+  const {cfCache, ...core} = state;
+  const backup = {
+    app: 'zenith',
+    type: 'backup',
+    version: 1,
+    exportedAt: new Date().toISOString(),
+    data: core,
+  };
+  const blob = new Blob([JSON.stringify(backup, null, 2)], {type: 'application/json'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'zenith-backup-' + todayStr() + '.json';
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  toast('Data exported — keep the file somewhere safe');
+}
+function importDataFromFile(event){
+  const file = event.target.files && event.target.files[0];
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    let backup;
+    try {
+      backup = JSON.parse(reader.result);
+    } catch(_){
+      toast('Import failed — not a valid JSON backup file');
+      return;
+    }
+    let data = null;
+    if(backup && typeof backup === 'object'){
+      if(backup.data && typeof backup.data === 'object') data = backup.data;
+      else if(backup.rating !== undefined || backup.totalSolved !== undefined || backup.problemDone) data = backup;
+    }
+    if(!data || typeof data !== 'object'){
+      toast('Import failed — this file does not look like a ZENITH backup');
+      return;
+    }
+    const ok = confirm('This will replace all current data on this device (rating, solved count, streaks, daily and contest history, snippets, patterns, post-mortems) with the contents of this backup. This cannot be undone. Continue?');
+    if(!ok){
+      toast('Import cancelled');
+      return;
+    }
+    try {
+      state = Object.assign(structuredClone(defaultState), data);
+      saveState();
+      toast('Data imported — reloading...');
+      setTimeout(() => location.reload(), 600);
+    } catch(_){
+      toast('Import failed — could not apply this backup');
+    }
+  };
+  reader.onerror = () => toast('Import failed — could not read the file');
+  reader.readAsText(file);
+  event.target.value = '';
 }
 function applySettingsPanel(){
   const theme = document.documentElement.getAttribute('data-theme') === 'light' ? 'light' : 'dark';
