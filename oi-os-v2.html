@@ -2256,6 +2256,14 @@ const EDITORIAL_BUDGET = {
 
 function cfUrl(p){ return `https://codeforces.com/problemset/problem/${p.c}/${p.i}`; }
 function ratingBands(r){
+  // Codeforces problems span 800–3500. Below the floor or above the ceiling the
+  // bands pin to the boundary, so every rating resolves to a real pool.
+  if(r < 800){
+    return { warmup:[800,800], main:[800,800], stretch:[800,800] };
+  }
+  if(r > 3500){
+    return { warmup:[3500,3500], main:[3500,3500], stretch:[3500,3500] };
+  }
   return {
     warmup:  [Math.max(800, r - 250), Math.max(800, r - 50)],
     main:    [Math.max(800, r - 50),  r + 100],
@@ -2380,9 +2388,17 @@ function fallbackPick(N){
     buckets[k].push(p);
   });
   const out = [];
-  ['warmup','main','stretch'].forEach(k => {
-    pickRandom(buckets[k].filter(p => !state.problemDone[cfUrl(p)]), dist[k]).forEach(p => out.push(toDailyEntry(p, k)));
-  });
+  const fill = (kind, count) => {
+    let picked = pickRandom(buckets[kind].filter(p => !state.problemDone[cfUrl(p)]), count);
+    if(picked.length < count){
+      const need = count - picked.length;
+      const fallback = ['main','warmup','stretch'].filter(k=>k!==kind)
+        .flatMap(k=>buckets[k]).filter(p => !state.problemDone[cfUrl(p)]);
+      picked = picked.concat(pickRandom(fallback, need));
+    }
+    return picked.map(p => toDailyEntry(p, kind));
+  };
+  ['warmup','main','stretch'].forEach(k => { out.push(...fill(k, dist[k])); });
   return out;
 }
 
@@ -2468,7 +2484,7 @@ async function generateDailyProblemsManual(N){
 
   for(let i=0; i<N; i++){
     const rawTarget = Number(state.manualRatings[i]);
-    const target = Number.isFinite(rawTarget) ? rawTarget : state.rating;
+    const target = Math.min(3500, Math.max(800, Number.isFinite(rawTarget) ? rawTarget : state.rating));
     let pool = source.filter(p => Number(p.r) === target && !used.has(cfUrl(p)));
     if(state.dailyMode === 'tags' && state.dailyTags.length){
       pool = pool.filter(p => (p.t || []).some(t => state.dailyTags.includes(t)));
@@ -3646,7 +3662,7 @@ function renderRatingWindow(){
   if(wrap) wrap.style.display = auto ? 'none' : 'block';
   if(auto && rw){
     const b = ratingBands(state.rating);
-    rw.innerHTML = `<b style="color:var(--ok)">warmup ${b.warmup[0]}–${b.warmup[1]}</b> &nbsp;·&nbsp; <b style="color:var(--accent)">main ${b.main[0]}–${b.main[1]}</b> &nbsp;·&nbsp; <b style="color:var(--warn)">stretch ${b.main[1]+1}–${b.stretch[1]}</b>`;
+    rw.innerHTML = `<b style="color:var(--ok)">warmup ${b.warmup[0]}–${b.warmup[1]}</b> &nbsp;·&nbsp; <b style="color:var(--accent)">main ${b.main[0]}–${b.main[1]}</b> &nbsp;·&nbsp; <b style="color:var(--warn)">stretch ${Math.min(b.main[1]+1, b.stretch[1])}–${b.stretch[1]}</b>`;
   } else if(!auto){
     renderManualRatingInputs();
   }
@@ -3706,7 +3722,7 @@ function renderPoolTicker(){
   const items = [
     `warmup <b>${b.warmup[0]}–${b.warmup[1]}</b>`,
     `main <b>${b.main[0]}–${b.main[1]}</b>`,
-    `stretch <b>${b.main[1]+1}–${b.stretch[1]}</b>`,
+    `stretch <b>${Math.min(b.main[1]+1, b.stretch[1])}–${b.stretch[1]}</b>`,
     `set <b>${state.dailyCount || 3} problems</b>`,
     `session <b>${budgetEl && budgetEl.value ? budgetEl.value : 120} min</b>`,
     `pool <b>${state.cfCache && state.cfCache.problems ? state.cfCache.problems.length.toLocaleString() : '—'}</b>`,
