@@ -1470,6 +1470,7 @@ body.pat-locked,body.snippet-modal-open{overflow:hidden}
     <div class="view-head">
       <h1 class="page-title">Pattern <span class="accent">Library</span>.</h1>
       <p class="page-lead">The 1000 to 1600 jump is mostly pattern recognition. Memorize the trigger signals, not the code.</p>
+      <span class="stage" id="patternBookLead" aria-live="polite"></span>
     </div>
 
     <div class="pat-tools">
@@ -2108,7 +2109,10 @@ let state = loadState();
 state.cfCache = loadCfCache();
 
 function todayStr(){
-  const d = new Date(); return d.toISOString().slice(0,10);
+  // local calendar date — the streak and the daily set must roll over at the
+  // user's midnight, not UTC midnight (toISOString would shift them by the TZ offset)
+  const d = new Date();
+  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
 }
 function fmtDate(){
   return new Date().toLocaleDateString(undefined,{weekday:'short',month:'short',day:'numeric'});
@@ -2202,7 +2206,7 @@ const stages = [
       {id:'constr', name:'Constructive',
        think:'Build a valid example by hand for small n and find the pattern. Do not solve, construct. Look for symmetry, parity, fixed positions.',
        problems:[
-         {n:'1break/1352F · Binary String Reconstruction', r:1500, url:'https://codeforces.com/problemset/problem/1352/F'},
+         {n:'1352F · Binary String Reconstruction', r:1500, url:'https://codeforces.com/problemset/problem/1352/F'},
          {n:'1311C · Perform the Combo', r:1200, url:'https://codeforces.com/problemset/problem/1311/C'},
          {n:'1305B · Kuroni and Simple Strings', r:1200, url:'https://codeforces.com/problemset/problem/1305/B'},
        ]},
@@ -2425,13 +2429,19 @@ function updateCfMeta(){
 function fallbackPick(N){
   // Curated stage problems when the CF API is unreachable
   const stage = getStageForRating(state.rating);
-  const flat = stage.topics.flatMap(t => t.problems.map(p => ({
-    c: p.url.split('/').slice(-2)[0],
-    i: p.url.split('/').slice(-1)[0],
-    n: p.n.replace(/^.*?·\s*/,''),
-    r: p.r,
-    t: [t.name.toLowerCase()],
-  })));
+  const flat = stage.topics.flatMap(t => t.problems.map(p => {
+    // only real problem URLs make it into the pool — search links (e.g. the
+    // speed-classify drill) would otherwise produce a broken cfUrl()
+    const m = p.url.match(/\/problem\/([^/]+)\/([^/?#]+)/);
+    if(!m) return null;
+    return {
+      c: m[1],
+      i: m[2],
+      n: p.n.replace(/^.*?·\s*/,''),
+      r: p.r,
+      t: [t.name.toLowerCase()],
+    };
+  })).filter(Boolean);
   const ur = state.rating;
   const dist = distributionFor(N);
   const buckets = {warmup:[], main:[], stretch:[]};
@@ -2561,8 +2571,10 @@ async function generateDailyProblemsManual(N){
   }
 }
 
+let usedFallbackForToday = false;
 function pickTodayProblems(){
   // synchronous fallback used on first load before the CF fetch
+  usedFallbackForToday = true;
   return fallbackPick(state.dailyCount || 3);
 }
 
@@ -2639,12 +2651,11 @@ function renderSnippets(){
     grid.innerHTML = `<div class="snippet-empty">${query || lang !== 'all' ? 'No snippets match your filter.' : 'No snippets yet. Add your first reusable template.'}</div>`;
     return;
   }
-  const names = {cpp:'C++',python:'Python',java:'Java',javascript:'JavaScript',other:'Other'};
   grid.innerHTML = list.map((s,i) => {
     const tags = (s.tags || '').split(',').map(t => t.trim()).filter(Boolean);
     const preview = s.code.length > 150 ? s.code.slice(0,150) + '...' : s.code;
     return `<article class="snippet-card" style="--i:${i}" data-testid="snippet-${escapeHtml(s.id)}">
-      <span class="snippet-lang">${names[s.language] || escapeHtml(s.language)}</span>
+      <span class="snippet-lang">${SNIPPET_LANG_NAMES[s.language] || escapeHtml(s.language)}</span>
       <h2 class="snippet-name" tabindex="0" role="button" onclick="openSnippetView('${s.id}')" onkeydown="if(event.key==='Enter'||event.key===' ')openSnippetView('${s.id}')">${escapeHtml(s.name)}</h2>
       ${s.description ? `<p class="snippet-desc">${escapeHtml(s.description)}</p>` : ''}
       <pre class="snippet-preview">${escapeHtml(preview)}</pre>
@@ -2947,13 +2958,13 @@ function executeStatement(tokens, gen){
     }
     case 'pair<int,int>':
     case 'pair<long long,long long>':{
-      if(args.length < 6) throw new Error('pair<int,int> name n min1 max1 min2 max2 [unique]');
-      return {name:name, type:type, value: gen.pairs(args[0], args[1], args[2], args[3], args[4], {unique:args[6] === true})};
+      if(args.length < 5) throw new Error('pair<int,int> name n min1 max1 min2 max2 [unique]');
+      return {name:name, type:type, value: gen.pairs(args[0], args[1], args[2], args[3], args[4], {unique:args[5] === true})};
     }
     case 'matrix<int>':
     case 'matrix<long long>':{
-      if(args.length < 5) throw new Error('matrix<int> name rows cols min max [unique]');
-      return {name:name, type:type, value: gen.matrix(args[0], args[1], args[2], args[3], {unique:args[5] === true})};
+      if(args.length < 4) throw new Error('matrix<int> name rows cols min max [unique]');
+      return {name:name, type:type, value: gen.matrix(args[0], args[1], args[2], args[3], {unique:args[4] === true})};
     }
     case 'graph':{
       if(args.length < 3) throw new Error('graph name n m [weighted] [directed] [simple]');
@@ -2968,8 +2979,8 @@ function executeStatement(tokens, gen){
       return {name:name, type:type, value: gen.permutation(args[0], args[1] === true)};
     }
     case 'array<string>':{
-      if(args.length < 5) throw new Error('array<string> name count minLen maxLen charset [unique]');
-      return {name:name, type:type, value: gen.arrayString(args[0], args[1], args[2], resolveCharset(args[3]), {unique:args[5] === true})};
+      if(args.length < 4) throw new Error('array<string> name count minLen maxLen charset [unique]');
+      return {name:name, type:type, value: gen.arrayString(args[0], args[1], args[2], resolveCharset(args[3]), {unique:args[4] === true})};
     }
     default:
       throw new Error('Unknown type "' + type + '"');
@@ -3382,28 +3393,6 @@ function highlightDSL(){
   });
 }
 
-function highlightCodeLegacy(code,lang){
-  const keywordMap={cpp:['alignas','auto','bool','break','case','catch','char','class','const','constexpr','continue','default','delete','do','double','else','enum','false','float','for','if','inline','int','long','namespace','new','nullptr','private','protected','public','return','short','signed','sizeof','static','struct','switch','template','this','throw','true','try','typedef','typename','using','virtual','void','volatile','while'],python:['and','as','assert','async','await','break','class','continue','def','del','elif','else','False','finally','for','from','global','if','import','in','is','lambda','None','not','or','pass','raise','return','True','try','while','with','yield'],java:['abstract','boolean','break','byte','case','catch','char','class','const','continue','default','do','double','else','enum','extends','false','final','finally','float','for','if','implements','import','instanceof','int','interface','long','new','null','package','private','protected','public','return','short','static','super','switch','this','throw','throws','true','try','void','while'],javascript:['async','await','break','case','catch','class','const','continue','debugger','default','delete','do','else','export','extends','false','finally','for','function','if','import','in','instanceof','let','new','null','of','return','super','switch','this','throw','true','try','typeof','var','void','while']};
-  const typeWords=new Set(['vector','string','map','set','unordered_map','unordered_set','queue','stack','deque','pair','array','long','int','float','double','char','bool','size_t','List','HashMap','Scanner']);
-  const keywords=new Set(keywordMap[lang] || []);
-  const safe=escapeHtml(code);
-  const tokenRe=/(\/\/.*|#.*|\/\*[\\s\\S]*?\*\/)|("(?:[^"\\\\]|\\\\.)*"|'(?:[^'\\\\]|\\\\.)*'|`(?:[^`\\\\]|\\\\.)*`)|\\b(\\d+(?:\\.\\d+)?)\\b|\\b([A-Za-z_]\\w*)\\b|(==|!=|<=|>=|=>|\+\+|--|&&|\\|\\||[+*\\/%=<>!?:-])/g;
-  while((match=tokenRe.exec(source))){
-    out.push(escapeHtml(source.slice(cursor, match.index)));
-    const [full,comment,string,number,word,operator]=match;
-    if(comment) out.push(`<span class="tk-c">${escapeHtml(comment)}</span>`);
-    else if(string) out.push(`<span class="tk-s">${escapeHtml(string)}</span>`);
-    else if(number) out.push(`<span class="tk-num">${number}</span>`);
-    else if(word){
-      const after=source.slice(tokenRe.lastIndex);
-      const cls=keywords.has(word)?'tk-kw':typeWords.has(word)?'tk-type':/^[A-Z]/.test(word)?'tk-const':/^\s*\(/.test(after)?'tk-f':'tk-var';
-      out.push(`<span class="${cls}">${word}</span>`);
-    } else out.push(`<span class="tk-op">${escapeHtml(operator)}</span>`);
-    cursor=tokenRe.lastIndex;
-  }
-  out.push(escapeHtml(source.slice(cursor)));
-  return out.join('');
-}
 function highlightCode(code,lang){
   const keywordMap={cpp:['auto','bool','break','case','catch','char','class','const','else','enum','false','float','for','if','int','long','namespace','new','nullptr','private','protected','public','return','static','struct','switch','template','this','throw','true','try','using','void','while'],python:['and','as','assert','async','await','break','class','continue','def','del','elif','else','False','finally','for','from','global','if','import','in','is','lambda','None','not','or','pass','raise','return','True','try','while','with','yield'],java:['abstract','boolean','break','case','catch','class','const','continue','default','do','else','extends','false','final','for','if','import','int','long','new','null','private','protected','public','return','static','super','switch','this','throw','true','try','void','while'],javascript:['async','await','break','case','catch','class','const','continue','default','else','export','extends','false','for','function','if','import','in','instanceof','let','new','null','of','return','super','switch','this','throw','true','try','typeof','var','void','while']};
   const types=new Set(['vector','string','map','set','unordered_map','unordered_set','queue','stack','deque','pair','array','long','int','float','double','char','bool','size_t']);
@@ -3427,8 +3416,8 @@ function highlightCode(code,lang){
 function openSnippetView(id){
   const s=(state.snippets || []).find(x=>x.id===id); if(!s) return;
   document.body.classList.add('snippet-modal-open');
-  snippetViewingId=id; const names={cpp:'C++',python:'Python',java:'Java',javascript:'JavaScript',other:'Other'};
-  document.getElementById('snippetViewTitle').textContent=s.name; document.getElementById('snippetViewLang').textContent=names[s.language] || s.language;
+  snippetViewingId=id;
+  document.getElementById('snippetViewTitle').textContent=s.name; document.getElementById('snippetViewLang').textContent=SNIPPET_LANG_NAMES[s.language] || s.language;
   const lang=s.language==='javascript'?'javascript':s.language==='python'?'python':s.language==='java'?'java':'cpp';
   document.getElementById('snippetViewCode').innerHTML=highlightCode(s.code,lang); document.getElementById('snippetViewModal').classList.add('open');
 }
@@ -3673,13 +3662,16 @@ function fmtClock(totalSec){
   return String(m).padStart(2, '0') + ':' + String(s).padStart(2, '0');
 }
 function sessionScale(){
-  const totalMin = parseInt(document.getElementById('timeBudget').value, 10) || 120;
+  const totalMin = Math.max(1, Math.min(240, parseInt(document.getElementById('timeBudget').value, 10) || 120));
   return totalMin / 120;
 }
 function effectiveBudgets(p){
   const s = sessionScale();
-  const hint = Math.max(1, Math.round(p.hintAt * s));
-  const budget = Math.max(hint + 1, Math.round(p.budget * s));
+  // entries saved by older versions may lack hintAt/budget — fall back to the
+  // default budgets for the problem kind so the countdown never shows NaN
+  const base = EDITORIAL_BUDGET[p.kind] || EDITORIAL_BUDGET.main;
+  const hint = Math.max(1, Math.round((p.hintAt || base.hint) * s));
+  const budget = Math.max(hint + 1, Math.round((p.budget || base.editorial) * s));
   return {hintAt: hint, budget};
 }
 function updateDailyBudgets(){
@@ -3825,7 +3817,7 @@ function tickDaily(){
   const note = document.getElementById('dailyProgressNote');
   let elapsed = state.dailyAccumulated;
   if(state.dailyRunning && state.dailyTimerStart) elapsed += Date.now() - state.dailyTimerStart;
-  const totalMin = parseInt(document.getElementById('timeBudget').value, 10) || 120;
+  const totalMin = Math.max(1, Math.min(240, parseInt(document.getElementById('timeBudget').value, 10) || 120));
   const totalMs = totalMin * 60 * 1000;
   const remaining = Math.max(0, totalMs - elapsed);
   const m = Math.floor(remaining / 60000);
@@ -4272,10 +4264,14 @@ function applyContestProblemCount(n){
       result.push({name:name, done:false, attempted:false, note:''});
     }
   }
+  // shrinking the contest must not silently drop solved slots from the count
+  const removedSolved = cur.filter((s, i) => i >= n2 && s.done).length;
+  if(removedSolved) state.totalSolved = Math.max(0, (state.totalSolved || 0) - removedSolved);
   state.contestSlots = result;
   state.contestProblems = n2;
   saveState();
   renderContestSlots();
+  updateSolvedDisplay();
 }
 
 let contestTimerInt = null;
@@ -5083,11 +5079,13 @@ if(contestProblemsEl){
   applyMuteBtn();
   updateMainBtn();
   applySettingsPanel();
-  // background CF fetch on first load; auto-generate if no problems yet
+  // background CF fetch on first load; the sync fallback painted the mission
+  // instantly, so swap in problems from the live pool once the fetch lands
   (async function(){
     await fetchCfProblems(false);
     updateCfMeta();
-    if(!state.dailyProblems.length){
+    if(usedFallbackForToday){
+      usedFallbackForToday = false;
       await generateDailyProblems();
     }
   })();
