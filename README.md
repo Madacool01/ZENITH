@@ -46,7 +46,14 @@ No build tools, no package manager, no server. You only need a modern web browse
 3. Open the extracted folder and double-click `oi-os-v2.html`.
 4. The app opens in your default browser. You're done.
 
-### Option 2: Clone with Git
+### Option 2: Download the ZIP from GitHub
+
+1. Click the green **Code** button at the top of this repository.
+2. Select **Download ZIP**.
+3. Extract the ZIP file.
+4. Double-click `oi-os-v2.html`.
+
+### Option 3: Clone with Git
 
 ```bash
 git clone https://github.com/Madacool01/ZENITH.git
@@ -67,13 +74,6 @@ xdg-open oi-os-v2.html
 ```
 
 Or just find the file in your file explorer and double-click it.
-
-### Option 3: Download the ZIP from GitHub
-
-1. Click the green **Code** button at the top of this repository.
-2. Select **Download ZIP**.
-3. Extract the ZIP file.
-4. Double-click `oi-os-v2.html`.
 
 ### What you need
 
