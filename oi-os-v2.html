@@ -4098,7 +4098,16 @@ function renderContestSlots(){
 }
 function updateSlot(i, field, val){
   const s = state.contestSlots[i];
+  const was = s.done;
   s[field] = val;
+  if(field === 'done'){
+    if(val && !was){
+      state.totalSolved = (state.totalSolved||0) + 1;
+    } else if(!val && was){
+      state.totalSolved = Math.max(0, state.totalSolved - 1);
+    }
+    updateSolvedDisplay();
+  }
   saveState();
   const row = document.querySelector(`.slot-row[data-testid="slot-${s.name}"]`);
   if(row) row.dataset.state = s.done ? 'done' : (s.attempted ? 'attempted' : '');
@@ -4201,13 +4210,16 @@ function resetContest(){
   state.contestStart = null;
   state.contestAccumulated = 0;
   state.contestRunning = false;
+  const solvedBefore = state.contestSlots.filter(s => s.done).length;
   state.contestSlots.forEach(s => { s.done = false; s.attempted = false; s.note = ''; });
+  if(solvedBefore) state.totalSolved = Math.max(0, (state.totalSolved||0) - solvedBefore);
   saveState();
   updateContestStateLabel('idle');
   if(contestTimerInt) clearInterval(contestTimerInt);
   tickContest();
   renderContestSlots();
   updateContestMainBtn();
+  updateSolvedDisplay();
   toast('Contest reset');
 }
 function toggleContestMain(){
