@@ -819,10 +819,6 @@ section.view.active{display:block;animation:viewIn .45s var(--ease) both}
   display:flex;align-items:center;justify-content:space-between;gap:12px;
   margin-top:auto;padding-top:13px;border-top:1px dashed var(--line);
 }
-.pat-shortcut{
-  font-family:var(--font-mono);font-size:10.5px;color:var(--pt,#ff5c33);
-  min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
-}
 .pat-open-hint{
   display:flex;align-items:center;gap:6px;flex-shrink:0;
   font-family:var(--font-mono);font-size:10px;letter-spacing:.14em;text-transform:uppercase;
@@ -889,10 +885,6 @@ body.pat-locked,body.snippet-modal-open{overflow:hidden}
   color:var(--pt,#ff5c33);padding-top:2px;font-weight:600;opacity:.8;
 }
 .pat-panel-field .pat-v{color:var(--text-2);font-size:14px;line-height:1.6;word-break:break-word;min-width:0}
-.pat-panel-field.shortcut .pat-v{
-  font-family:var(--font-mono);font-size:12.5px;color:var(--pt,#ff5c33);
-  border-left:2px solid var(--pt,#ff5c33);padding-left:12px;
-}
 .pat-detail-actions{display:flex;gap:10px;margin-top:26px;padding-top:18px;border-top:1px solid var(--line)}
 .pat-panel-foot{
   display:flex;align-items:center;justify-content:space-between;gap:16px;
@@ -4257,23 +4249,6 @@ function deletePostMortem(i){
 
 /* ============ PATTERNS ============ */
 const PATTERN_TAGS = ['implementation','sorting','prefix sums','two pointers','binary search','greedy','frequency','bit manipulation','math','constructive','dynamic programming','graphs','data structures'];
-const patterns = [
-  {name:'Sorting → adjacency', tags:['sorting'], trigger:'Order doesnt matter; problem talks about pairs / differences', idea:'Sort the array — now neighbors are closest. Iterate once.', shortcut:'No order? Sort first.'},
-  {name:'Prefix Sums', tags:['prefix sums'], trigger:'Range queries / "sum of subarray" / "count in [l,r]"', idea:'Precompute P[i] = a[0]+...+a[i-1]. Range sum = P[r+1] - P[l].', shortcut:'Range sum? Prefix.'},
-  {name:'Two Pointers', tags:['two pointers'], trigger:'Monotonic structure: longest subarray, smallest window with property X', idea:'Move right to expand; move left to shrink. Each pointer moves O(n).', shortcut:'Smallest/longest window? 2P.'},
-  {name:'Binary Search on Answer', tags:['binary search'], trigger:'"Min/max k such that..." and check(k) is monotone', idea:'Bsearch on k; implement check(k) as a feasibility test.', shortcut:'Min/max with feasibility? Bsearch.'},
-  {name:'Greedy (exchange)', tags:['greedy'], trigger:'Local optimal feels right; n is big; no DP-shaped state', idea:'Prove: swap two greedy picks → answer doesnt worsen. Then commit.', shortcut:'Local optimal = global? Greedy.'},
-  {name:'Frequency Counting', tags:['frequency'], trigger:'"Number of X with property Y" / counting subsets / strings', idea:'Build count[] or map. Process by frequency, not order.', shortcut:'How many? Count first.'},
-  {name:'Bit-by-bit', tags:['bit manipulation'], trigger:'AND/OR/XOR on whole array; large numbers up to 1e9', idea:'Each bit is independent; solve for bit b ∈ [0,30], then combine.', shortcut:'Bitwise? Per-bit.'},
-  {name:'Parity / Mod-k Argument', tags:['math'], trigger:'Operations preserve some quantity mod k; n is huge', idea:'Find invariant (sum mod 2, count of odds, etc). Answer depends only on it.', shortcut:'Huge n? Find invariant.'},
-  {name:'Constructive', tags:['constructive'], trigger:'"Construct any valid X" / output an example', idea:'Solve n=1,2,3 by hand. Spot the recipe. Prove it scales.', shortcut:'Construct any? Hand-solve small.'},
-  {name:'1D DP', tags:['dynamic programming'], trigger:'"In how many ways..." / "best value ending at i"', idea:'dp[i] = best/count up to index i. Define state in 1 sentence.', shortcut:'Ways? Best ending at i? DP.'},
-  {name:'BFS / Shortest Path', tags:['graphs'], trigger:'Grid / graph / "minimum steps to reach"', idea:'BFS from source. Layers = distance. Works on unweighted graphs.', shortcut:'Min steps? BFS.'},
-  {name:'DFS / Components', tags:['graphs'], trigger:'"How many groups" / "is connected" / flood fill', idea:'DFS each unvisited node; count components.', shortcut:'Groups? DFS.'},
-  {name:'Sorting + Two Pointers Combo', tags:['sorting','two pointers'], trigger:'Pairs satisfying inequality / 2-sum / closest sum', idea:'Sort, then two pointers from ends.', shortcut:'Pairs with inequality? Sort+2P.'},
-  {name:'Priority Queue (Heap)', tags:['data structures'], trigger:'"Always pick the smallest/largest next" / scheduling', idea:'Insert/extract O(log n). Process in priority order.', shortcut:'Always-min next? Heap.'},
-  {name:'Sliding Window', tags:['two pointers'], trigger:'Fixed-size or variable-size window over array; sum/max within', idea:'Maintain window invariant; add right, remove left.', shortcut:'Window of length k? Slide.'},
-];
 // one signature hue per problem type — gives each row a distinct, instantly readable identity
 const PATTERN_TONES = {
   'implementation':'#ff5c33',
@@ -4370,17 +4345,15 @@ function syncPatternGridLines(){
 }
 
 function renderPatterns(){
-  const builtIn = patterns.map(p => ({...p, tags: normalizePatternTags(p), _custom:false}));
   const custom = (state.customPatterns || []).map(p => ({...p, tags: normalizePatternTags(p), _custom:true}));
   const selected = state.patternTagFilters || [];
-  let all = [...builtIn, ...custom];
+  let all = [...custom];
   if(selected.length) all = all.filter(p => p.tags.some(tag => selected.includes(tag)));
   const q = (patternQuery || '').trim().toLowerCase();
   if(q) all = all.filter(p =>
     p.name.toLowerCase().includes(q) ||
     (p.trigger || '').toLowerCase().includes(q) ||
     (p.idea || '').toLowerCase().includes(q) ||
-    (p.shortcut || '').toLowerCase().includes(q) ||
     (p.tags || []).some(t => t.includes(q))
   );
   all.sort((a,b) => {
@@ -4409,7 +4382,6 @@ function renderPatterns(){
       <span class="pat-name">${escapeHtml(p.name)}</span>
       ${p.tags.length ? `<span class="pat-tags">${p.tags.map(t => `<span class="pat-tag" style="--pt:${patternTone([t])}">${escapeHtml(t)}</span>`).join('')}</span>` : ''}
       <span class="pat-card-foot">
-        <span class="pat-shortcut">${p.shortcut ? '↪ ' + escapeHtml(p.shortcut) : ''}</span>
         <span class="pat-open-hint">open<span class="ph-ic">↗</span></span>
       </span>
     </button>`;
@@ -4512,8 +4484,6 @@ function buildPatternPanel(p, i, tone){
   const total = patternNavList.length;
   const tags = p.tags && p.tags.length
     ? `<div class="pat-detail-tags">${p.tags.map(t => `<span class="pat-tag" style="--pt:${patternTone([t])}">${escapeHtml(t)}</span>`).join('')}</div>` : '';
-  const shortcut = p.shortcut
-    ? `<div class="pat-panel-field shortcut" style="--fd:2"><span class="pat-k">Shortcut</span><p class="pat-v">${escapeHtml(p.shortcut)}</p></div>` : '';
   const actions = p._custom
     ? `<div class="pat-detail-actions">
         <button class="btn sm" data-testid="edit-pattern-${p.id}" onclick="editPatternFromCard('${p.id}')">Edit</button>
@@ -4530,7 +4500,6 @@ function buildPatternPanel(p, i, tone){
     <div class="pat-panel-fields">
       <div class="pat-panel-field" style="--fd:0"><span class="pat-k">Trigger</span><p class="pat-v">${escapeHtml(p.trigger || '—')}</p></div>
       <div class="pat-panel-field" style="--fd:1"><span class="pat-k">Idea</span><p class="pat-v">${escapeHtml(p.idea || '—')}</p></div>
-      ${shortcut}
     </div>
     ${actions}
     <div class="pat-panel-foot">
